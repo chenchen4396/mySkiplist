@@ -6,13 +6,12 @@
 #include <mutex>    //unique_lock
 #include <shared_mutex> //shared_mutex shared_lock
 #include <fstream>
-#include <type_traits>
 #define STORE_FILE "./store/dumpFile"
 // typedef std::shared_lock<std::shared_mutex> ReadLock;
 // typedef std::lock_guard<std::shared_mutex> WriteLock;
 std::shared_mutex mtx;     // mutex for critical section
 std::string delimiter = ":";
-int readcount=0;
+
 //Class template to implement node
 template<typename K, typename V> 
 class Node {
@@ -27,6 +26,8 @@ public:
     K get_key() const;
 
     V get_value() const;
+    
+    int get_node_level() const;
 
     void set_value(V);
     
@@ -46,7 +47,7 @@ class SkipList {
 public: 
     SkipList(int);
     ~SkipList();
-    int get_random_level();
+    
     Node<K, V>* create_node(K, V, int);
     //插入数据
     int insert_element(K, V);
@@ -60,10 +61,10 @@ public:
     void dump_file();
     //加载数据
     void load_file();
-    //K为int等时用该函数加载数据
-    void load_int_file();
     //返回数据规模
     int size();
+    //获取随机层数
+    int get_random_level();
 
 private:
     void get_key_value_from_string(const std::string& str, std::string* key, std::string* value);
@@ -83,7 +84,7 @@ private:
     std::ifstream _file_reader;
 
     // skiplist current element count
-    int _element_count;
+    int _node_count;
 };
 template<typename K, typename V> 
 Node<K, V>::Node(const K k, const V v, int level) {
@@ -111,7 +112,10 @@ template<typename K, typename V>
 V Node<K, V>::get_value() const {
     return value;
 };
-
+template<typename K, typename V> 
+int Node<K, V>::get_node_level() const{
+    return node_level;
+};
 template<typename K, typename V> 
 void Node<K, V>::set_value(V value) {
     this->value=value;
@@ -124,15 +128,13 @@ SkipList<K, V>::SkipList(int max_level) {
 
     this->_max_level = max_level;
     this->_skip_list_level = 0;
-    this->_element_count = 0;
+    this->_node_count = 0;
 
-    // create header node and initialize key and value to null
     K k;
     V v;
     this->_header = new Node<K, V>(k, v, _max_level);
 };
 
-// close
 template<typename K, typename V> 
 SkipList<K, V>::~SkipList() {
 
@@ -142,6 +144,7 @@ SkipList<K, V>::~SkipList() {
     if (_file_reader.is_open()) {
         _file_reader.close();
     }
+    //需循环删除所有节点
     Node<K,V>* current=_header->forward[0];
     while(current){
         Node<K,V> *tmp=current->forward[0];
@@ -189,7 +192,7 @@ void SkipList<K, V>::display_list() {
 //get size of skiplist
 template<typename K, typename V> 
 int SkipList<K, V>::size() { 
-    return _element_count;
+    return _node_count;
 }
 
 template<typename K, typename V>
@@ -213,13 +216,12 @@ bool SkipList<K, V>::is_valid_string(const std::string& str) {
     }
     return true;
 }
-//insert_element
+
 template<typename K, typename V>
 int SkipList<K, V>::insert_element(const K key, const V value) {
-    //WriteLock lock(mtx);
     mtx.lock();
     Node<K, V> *current = this->_header;
- 
+    
     // create update array and initialize it 
     // update is array which put node that the node->forward[i] should be operated later
     Node<K, V> *update[_max_level+1];
@@ -228,7 +230,6 @@ int SkipList<K, V>::insert_element(const K key, const V value) {
     // start form highest level of skip list 
     for(int i = _skip_list_level; i >= 0; i--) {
         while(current->forward[i] != NULL && current->forward[i]->get_key() < key) {
-        //while(current->forward[i] != NULL && (key.compare(current->forward[i]->get_key())>0)) {
             current = current->forward[i]; 
         }
         update[i] = current;
@@ -268,7 +269,7 @@ int SkipList<K, V>::insert_element(const K key, const V value) {
             update[i]->forward[i] = inserted_node;
         }
         std::cout << "Successfully inserted key:" << key << ", value:" << value << std::endl;
-        _element_count ++;
+        _node_count ++;
     }
     mtx.unlock();
     return 0;
@@ -277,8 +278,7 @@ int SkipList<K, V>::insert_element(const K key, const V value) {
 // Delete element from skip list 
 template<typename K, typename V> 
 void SkipList<K, V>::delete_element(K key) {
-    //WriteLock lock(mtx);
-    mtx.lock();
+    mtx.lock(); 
     Node<K,V> *current=this->_header;
     Node<K,V> *update[_max_level+1];
     memset(update, 0, sizeof(Node<K, V>*)*(_max_level+1));
@@ -290,11 +290,14 @@ void SkipList<K, V>::delete_element(K key) {
     }
     current=current->forward[0];
     if(current!=NULL && current->get_key()==key){
-        for(int i=0;i<=_skip_list_level;++i){
-            if(update[i]->forward[i]!=current){
-                break;
-            }
-            update[i]->forward[i]=current->forward[i];
+        // for(int i=0;i<=_skip_list_level;++i){
+        //     if(update[i]->forward[i]!=current){
+        //         break;
+        //     }
+        //     update[i]->forward[i]=current->forward[i];
+        // }
+        for (int i = current->get_node_level(); i >= 0; --i) {
+            update[i]->forward[i] = current->forward[i];
         }
 
         // Remove levels which have no elements
@@ -303,14 +306,17 @@ void SkipList<K, V>::delete_element(K key) {
         }
 
         std::cout << "Successfully deleted key "<< key << std::endl;
-        _element_count --;
+        _node_count --;
+    }
+    else{
+        std::cout <<"(deleted)Not exist "<<"key"<< key << std::endl;
     }
     mtx.unlock();
     return;
 
 }
 
-//search element from= skip list
+// 查询节点
 template<typename K,typename V>
 bool SkipList<K,V>::search_element(K key){
     mtx.lock_shared();
@@ -349,7 +355,7 @@ void SkipList<K, V>::dump_file() {
 }
 
 // 从磁盘加载数据
-template<typename K, typename V> 
+template<typename K, typename V>
 void SkipList<K, V>::load_file() {
 
     _file_reader.open(STORE_FILE);
@@ -362,15 +368,55 @@ void SkipList<K, V>::load_file() {
         if (key->empty() || value->empty()) {
             continue;
         }
-
-        insert_element(*key, *value);
+        insert_element(*key,*value);
     }
     delete key;
     delete value;
     _file_reader.close();
 }
-template<typename K, typename V> 
-void SkipList<K, V>::load_int_file() {
+template<>
+void SkipList<int, int>::load_file() {
+
+    _file_reader.open(STORE_FILE);
+    std::cout << "load_file-----------------" << std::endl;
+    std::string line;
+    std::string* key = new std::string();
+    std::string* value = new std::string();
+    while (getline(_file_reader, line)) {
+        get_key_value_from_string(line, key, value);
+        if (key->empty() || value->empty()) {
+            continue;
+        }
+        int tmp=stoi(*key);
+        int tmp2=stoi(*value);
+        insert_element(tmp, tmp2);
+    }
+    delete key;
+    delete value;
+    _file_reader.close();
+}
+template<>
+void SkipList<std::string, int>::load_file() {
+
+    _file_reader.open(STORE_FILE);
+    std::cout << "load_file-----------------" << std::endl;
+    std::string line;
+    std::string* key = new std::string();
+    std::string* value = new std::string();
+    while (getline(_file_reader, line)) {
+        get_key_value_from_string(line, key, value);
+        if (key->empty() || value->empty()) {
+            continue;
+        }
+        int tmp2=stoi(*value);
+        insert_element(*key, tmp2);
+    }
+    delete key;
+    delete value;
+    _file_reader.close();
+}
+template<>
+void SkipList<int,std::string>::load_file() {
 
     _file_reader.open(STORE_FILE);
     std::cout << "load_file-----------------" << std::endl;

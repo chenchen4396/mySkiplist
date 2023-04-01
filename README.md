@@ -11,7 +11,7 @@
     
     2.修复了load_file存在的bug
     
-    3.Key可支持string、int等
+    3.Key、value可支持string、int
     
     4.解决了大部分内存泄露等问题
     
