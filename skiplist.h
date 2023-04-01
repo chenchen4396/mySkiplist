@@ -3,13 +3,13 @@
 #include <string>
 #include <cmath>
 #include <cstring>
-#include <mutex>    //unique_lock
-#include <shared_mutex> //shared_mutex shared_lock
+#include <mutex> 
+#include <shared_mutex> 
 #include <fstream>
 #define STORE_FILE "./store/dumpFile"
 // typedef std::shared_lock<std::shared_mutex> ReadLock;
 // typedef std::lock_guard<std::shared_mutex> WriteLock;
-std::shared_mutex mtx;     // mutex for critical section
+std::shared_mutex mtx;
 std::string delimiter = ":";
 
 //Class template to implement node
@@ -49,21 +49,21 @@ public:
     ~SkipList();
     
     Node<K, V>* create_node(K, V, int);
-    //插入数据
+    
     int insert_element(K, V);
-    //展示数据
+   
     void display_list();
-    //查询数据
+    
     bool search_element(K);
-    //删除数据
+    
     void delete_element(K);
-    //数据落盘
+    
     void dump_file();
-    //加载数据
+    
     void load_file();
-    //返回数据规模
+    
     int size();
-    //获取随机层数
+    
     int get_random_level();
 
 private:
@@ -122,7 +122,7 @@ void Node<K, V>::set_value(V value) {
 };
 
 
-// construct skip list
+
 template<typename K, typename V> 
 SkipList<K, V>::SkipList(int max_level) {
 
@@ -144,7 +144,7 @@ SkipList<K, V>::~SkipList() {
     if (_file_reader.is_open()) {
         _file_reader.close();
     }
-    //需循环删除所有节点
+    
     Node<K,V>* current=_header->forward[0];
     while(current){
         Node<K,V> *tmp=current->forward[0];
@@ -154,14 +154,14 @@ SkipList<K, V>::~SkipList() {
     delete _header;
 }
 
-// create new node 
+
 template<typename K, typename V>
 Node<K, V>* SkipList<K, V>::create_node(const K k, const V v, int level) {
     Node<K, V> *n = new Node<K, V>(k, v, level);
     return n;
 }
 
-//get a random_level;
+
 template<typename K, typename V>
 int SkipList<K, V>::get_random_level(){
 
@@ -175,7 +175,7 @@ int SkipList<K, V>::get_random_level(){
 //display_list
 template<typename K, typename V> 
 void SkipList<K, V>::display_list() {
-    //ReadLock lock(mtx);
+    
     mtx.lock_shared();
     std::cout << "\n*****SkipList*****"<<"\n"; 
     for (int i = 0; i <= _skip_list_level; i++) {
@@ -189,7 +189,7 @@ void SkipList<K, V>::display_list() {
     }
     mtx.unlock_shared();
 }
-//get size of skiplist
+
 template<typename K, typename V> 
 int SkipList<K, V>::size() { 
     return _node_count;
@@ -275,7 +275,6 @@ int SkipList<K, V>::insert_element(const K key, const V value) {
     return 0;
 }
 
-// Delete element from skip list 
 template<typename K, typename V> 
 void SkipList<K, V>::delete_element(K key) {
     mtx.lock(); 
@@ -290,12 +289,6 @@ void SkipList<K, V>::delete_element(K key) {
     }
     current=current->forward[0];
     if(current!=NULL && current->get_key()==key){
-        // for(int i=0;i<=_skip_list_level;++i){
-        //     if(update[i]->forward[i]!=current){
-        //         break;
-        //     }
-        //     update[i]->forward[i]=current->forward[i];
-        // }
         for (int i = current->get_node_level(); i >= 0; --i) {
             update[i]->forward[i] = current->forward[i];
         }
@@ -316,7 +309,6 @@ void SkipList<K, V>::delete_element(K key) {
 
 }
 
-// 查询节点
 template<typename K,typename V>
 bool SkipList<K,V>::search_element(K key){
     mtx.lock_shared();
@@ -336,7 +328,6 @@ bool SkipList<K,V>::search_element(K key){
     mtx.unlock_shared();
     return false;
 }
-// 存储数据到磁盘
 template<typename K, typename V> 
 void SkipList<K, V>::dump_file() {
     std::cout << "dump_file-----------------" << std::endl;
@@ -354,7 +345,6 @@ void SkipList<K, V>::dump_file() {
     return ;
 }
 
-// 从磁盘加载数据
 template<typename K, typename V>
 void SkipList<K, V>::load_file() {
 
